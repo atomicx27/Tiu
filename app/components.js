@@ -2,6 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import JSZip from 'jszip';
 import { verifyPassword, getSignedUploadParams, revalidateVideoCache, deleteVideo } from './actions/cloudinary';
 
 /**
@@ -362,6 +363,10 @@ export function UploadZone({ onUploadSuccess }) {
 
   const downloadAllQueueQrs = async () => {
     const completed = queue.filter(item => item.status === 'completed');
+    if (completed.length === 0) return;
+
+    const zip = new JSZip();
+
     for (let i = 0; i < completed.length; i++) {
       const item = completed[i];
       const svgElement = document.getElementById(`queue-qr-${item.id}`);
@@ -371,7 +376,7 @@ export function UploadZone({ onUploadSuccess }) {
       const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
       const blobURL = URL.createObjectURL(svgBlob);
       
-      await new Promise((resolve) => {
+      const base64Data = await new Promise((resolve) => {
         const image = new Image();
         image.onload = () => {
           const canvas = document.createElement('canvas');
@@ -383,19 +388,24 @@ export function UploadZone({ onUploadSuccess }) {
           context.drawImage(image, 0, 0, 300, 300);
           
           const png = canvas.toDataURL('image/png');
-          const downloadLink = document.createElement('a');
-          downloadLink.href = png;
-          downloadLink.download = `${item.title.replace(/\s+/g, '-')}-qr.png`;
-          document.body.appendChild(downloadLink);
-          downloadLink.click();
-          document.body.removeChild(downloadLink);
+          const base64 = png.split(',')[1];
           URL.revokeObjectURL(blobURL);
-          resolve();
+          resolve(base64);
         };
         image.src = blobURL;
       });
-      await new Promise(r => setTimeout(r, 250));
+
+      const filename = `${item.title.replace(/\s+/g, '-')}-qr.png`;
+      zip.file(filename, base64Data, { base64: true });
     }
+
+    const content = await zip.generateAsync({ type: 'blob' });
+    const downloadLink = document.createElement('a');
+    downloadLink.href = URL.createObjectURL(content);
+    downloadLink.download = 'tiu-birthday-queue-qrs.zip';
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
   };
 
   return (
@@ -645,8 +655,9 @@ export function VideoGallery({ initialVideos, isAdmin }) {
   );
 
   const handleDownloadAll = async () => {
-    const confirmDownload = window.confirm(`This will download all ${initialVideos.length} QR codes as individual files. Your browser may ask for permission to download multiple files. Proceed?`);
-    if (!confirmDownload) return;
+    if (initialVideos.length === 0) return;
+
+    const zip = new JSZip();
 
     for (let i = 0; i < initialVideos.length; i++) {
       const video = initialVideos[i];
@@ -657,7 +668,7 @@ export function VideoGallery({ initialVideos, isAdmin }) {
       const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
       const blobURL = URL.createObjectURL(svgBlob);
       
-      await new Promise((resolve) => {
+      const base64Data = await new Promise((resolve) => {
         const image = new Image();
         image.onload = () => {
           const canvas = document.createElement('canvas');
@@ -669,19 +680,24 @@ export function VideoGallery({ initialVideos, isAdmin }) {
           context.drawImage(image, 0, 0, 300, 300);
           
           const png = canvas.toDataURL('image/png');
-          const downloadLink = document.createElement('a');
-          downloadLink.href = png;
-          downloadLink.download = `${video.filename || 'qr'}-qr.png`;
-          document.body.appendChild(downloadLink);
-          downloadLink.click();
-          document.body.removeChild(downloadLink);
+          const base64 = png.split(',')[1];
           URL.revokeObjectURL(blobURL);
-          resolve();
+          resolve(base64);
         };
         image.src = blobURL;
       });
-      await new Promise(r => setTimeout(r, 250));
+
+      const filename = `${video.filename || 'qr'}-qr.png`;
+      zip.file(filename, base64Data, { base64: true });
     }
+
+    const content = await zip.generateAsync({ type: 'blob' });
+    const downloadLink = document.createElement('a');
+    downloadLink.href = URL.createObjectURL(content);
+    downloadLink.download = 'tiu-birthday-all-qrs.zip';
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
   };
 
   return (
