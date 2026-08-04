@@ -360,6 +360,44 @@ export function UploadZone({ onUploadSuccess }) {
     setUploading(false);
   };
 
+  const downloadAllQueueQrs = async () => {
+    const completed = queue.filter(item => item.status === 'completed');
+    for (let i = 0; i < completed.length; i++) {
+      const item = completed[i];
+      const svgElement = document.getElementById(`queue-qr-${item.id}`);
+      if (!svgElement) continue;
+
+      const svgString = new XMLSerializer().serializeToString(svgElement);
+      const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const blobURL = URL.createObjectURL(svgBlob);
+      
+      await new Promise((resolve) => {
+        const image = new Image();
+        image.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 300;
+          canvas.height = 300;
+          const context = canvas.getContext('2d');
+          context.fillStyle = '#FFFFFF';
+          context.fillRect(0, 0, 300, 300);
+          context.drawImage(image, 0, 0, 300, 300);
+          
+          const png = canvas.toDataURL('image/png');
+          const downloadLink = document.createElement('a');
+          downloadLink.href = png;
+          downloadLink.download = `${item.title.replace(/\s+/g, '-')}-qr.png`;
+          document.body.appendChild(downloadLink);
+          downloadLink.click();
+          document.body.removeChild(downloadLink);
+          URL.revokeObjectURL(blobURL);
+          resolve();
+        };
+        image.src = blobURL;
+      });
+      await new Promise(r => setTimeout(r, 250));
+    }
+  };
+
   return (
     <div className="upload-wrapper-container">
       <div 
@@ -393,11 +431,18 @@ export function UploadZone({ onUploadSuccess }) {
 
       {queue.length > 0 && (
         <div style={{ background: 'var(--card-surface)', padding: 'var(--space-md)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-card)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)', borderBottom: '1px solid rgba(0,0,0,0.05)', paddingBottom: 'var(--space-xs)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)', borderBottom: '1px solid rgba(0,0,0,0.05)', paddingBottom: 'var(--space-xs)', flexWrap: 'wrap', gap: '8px' }}>
             <h4 style={{ color: 'var(--primary-pink)' }}>Upload Queue ({queue.length} files)</h4>
-            <button onClick={clearQueue} className="btn btn-outline" style={{ padding: '6px 12px', fontSize: '0.75rem', borderColor: '#FF4C4C', color: '#FF4C4C' }}>
-              Clear Queue 🗑️
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {queue.some(item => item.status === 'completed') && (
+                <button onClick={downloadAllQueueQrs} className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '0.75rem' }}>
+                  Download All QRs 📥
+                </button>
+              )}
+              <button onClick={clearQueue} className="btn btn-outline" style={{ padding: '6px 12px', fontSize: '0.75rem', borderColor: '#FF4C4C', color: '#FF4C4C' }}>
+                Clear Queue 🗑️
+              </button>
+            </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)', maxHeight: '400px', overflowY: 'auto', paddingRight: '4px' }}>
@@ -465,6 +510,22 @@ export function UploadZone({ onUploadSuccess }) {
           <QRDisplay value={showQrModal} filename="birthday-video-qr" onClose={() => setShowQrModal('')} />
         </div>
       )}
+
+      {/* Hidden QR code renderings for queue batch downloads */}
+      <div style={{ display: 'none' }}>
+        {queue.map(item => (
+          item.status === 'completed' && (
+            <QRCodeSVG
+              key={`queue-qr-${item.id}`}
+              id={`queue-qr-${item.id}`}
+              value={item.qrUrl}
+              size={300}
+              level="H"
+              marginSize={2}
+            />
+          )
+        ))}
+      </div>
     </div>
   );
 }
@@ -583,9 +644,49 @@ export function VideoGallery({ initialVideos, isAdmin }) {
     v.title.toLowerCase().includes(search.toLowerCase())
   );
 
+  const handleDownloadAll = async () => {
+    const confirmDownload = window.confirm(`This will download all ${initialVideos.length} QR codes as individual files. Your browser may ask for permission to download multiple files. Proceed?`);
+    if (!confirmDownload) return;
+
+    for (let i = 0; i < initialVideos.length; i++) {
+      const video = initialVideos[i];
+      const svgElement = document.getElementById(`gallery-qr-${video.publicId}`);
+      if (!svgElement) continue;
+
+      const svgString = new XMLSerializer().serializeToString(svgElement);
+      const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const blobURL = URL.createObjectURL(svgBlob);
+      
+      await new Promise((resolve) => {
+        const image = new Image();
+        image.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 300;
+          canvas.height = 300;
+          const context = canvas.getContext('2d');
+          context.fillStyle = '#FFFFFF';
+          context.fillRect(0, 0, 300, 300);
+          context.drawImage(image, 0, 0, 300, 300);
+          
+          const png = canvas.toDataURL('image/png');
+          const downloadLink = document.createElement('a');
+          downloadLink.href = png;
+          downloadLink.download = `${video.filename || 'qr'}-qr.png`;
+          document.body.appendChild(downloadLink);
+          downloadLink.click();
+          document.body.removeChild(downloadLink);
+          URL.revokeObjectURL(blobURL);
+          resolve();
+        };
+        image.src = blobURL;
+      });
+      await new Promise(r => setTimeout(r, 250));
+    }
+  };
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--space-xl)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-md)', marginBottom: 'var(--space-xl)' }}>
         <input
           type="text"
           value={search}
@@ -594,6 +695,11 @@ export function VideoGallery({ initialVideos, isAdmin }) {
           className="input-field"
           style={{ maxWidth: '400px', margin: 0, padding: '12px 20px', borderRadius: 'var(--radius-full)' }}
         />
+        {initialVideos.length > 0 && (
+          <button onClick={handleDownloadAll} className="btn btn-primary" style={{ borderRadius: 'var(--radius-full)' }}>
+            Download All QR Codes 📥 ({initialVideos.length})
+          </button>
+        )}
       </div>
 
       {filtered.length === 0 ? (
@@ -623,6 +729,20 @@ export function VideoGallery({ initialVideos, isAdmin }) {
           <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
         </svg>
       </a>
+
+      {/* Hidden QR code renderings for gallery batch downloads */}
+      <div style={{ display: 'none' }}>
+        {initialVideos.map(video => (
+          <QRCodeSVG
+            key={`gallery-qr-${video.publicId}`}
+            id={`gallery-qr-${video.publicId}`}
+            value={`${typeof window !== 'undefined' ? window.location.origin : ''}/watch/${video.publicId}`}
+            size={300}
+            level="H"
+            marginSize={2}
+          />
+        ))}
+      </div>
     </div>
   );
 }
