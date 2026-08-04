@@ -395,7 +395,8 @@ export function UploadZone({ onUploadSuccess }) {
         image.src = blobURL;
       });
 
-      const filename = `${item.title.replace(/\s+/g, '-')}-qr.png`;
+      const cleanTitle = item.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      const filename = `${cleanTitle}_${i + 1}-qr.png`;
       zip.file(filename, base64Data, { base64: true });
     }
 
@@ -687,7 +688,9 @@ export function VideoGallery({ initialVideos, isAdmin }) {
         image.src = blobURL;
       });
 
-      const filename = `${video.filename || 'qr'}-qr.png`;
+      const cleanTitle = video.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      const uniqueId = video.publicId.replace('tiu_videos/', '');
+      const filename = `${cleanTitle}_${uniqueId}-qr.png`;
       zip.file(filename, base64Data, { base64: true });
     }
 
