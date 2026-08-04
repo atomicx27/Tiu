@@ -149,15 +149,14 @@ export function QRDisplay({ value, filename, onClose }) {
 
 /**
  * 3. UploadZone Component
- * Handles direct signed browser-to-Cloudinary uploads with progress bar
+ * Handles bulk browser-to-Cloudinary signed uploads with queue tracking
  */
 export function UploadZone({ onUploadSuccess }) {
-  const [title, setTitle] = useState('');
+  const [queue, setQueue] = useState([]);
   const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState('');
-  const [qrUrl, setQrUrl] = useState('');
+  const [showQrModal, setShowQrModal] = useState('');
   
   const fileInputRef = useRef(null);
 
@@ -166,29 +165,17 @@ export function UploadZone({ onUploadSuccess }) {
     setDragOver(isOver);
   };
 
-  const processUpload = async (file) => {
-    if (!file) return;
-    if (!title.trim()) {
-      setError('Please enter a video title first!');
-      return;
-    }
-    
-    // Cloudinary free tier max video size is 100MB
-    if (file.size > 100 * 1024 * 1024) {
-      setError('Video is too large! Maximum allowed size is 100MB.');
-      return;
-    }
-
-    setUploading(true);
-    setProgress(0);
-    setError('');
-    setQrUrl('');
+  const uploadSingleFile = async (itemId, file, uploadTitle) => {
+    // 1. Mark as uploading
+    setQueue(prev => prev.map(item => 
+      item.id === itemId ? { ...item, status: 'uploading', progress: 0 } : item
+    ));
 
     try {
-      // 1. Fetch server-signed credentials
-      const { signature, timestamp, folder, eager, context, apiKey, cloudName } = await getSignedUploadParams(title);
+      // 2. Fetch signed parameters from server action
+      const { signature, timestamp, folder, eager, context, apiKey, cloudName } = await getSignedUploadParams(uploadTitle);
 
-      // 2. Prepare Form Data
+      // 3. Construct direct upload form payload
       const formData = new FormData();
       formData.append('file', file);
       formData.append('api_key', apiKey);
@@ -198,13 +185,15 @@ export function UploadZone({ onUploadSuccess }) {
       formData.append('eager', eager);
       formData.append('context', context);
 
-      // 3. Perform Direct XHR POST
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`);
 
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable) {
-          setProgress(Math.round((event.loaded / event.total) * 100));
+          const currentProgress = Math.round((event.loaded / event.total) * 100);
+          setQueue(prev => prev.map(item => 
+            item.id === itemId ? { ...item, progress: currentProgress } : item
+          ));
         }
       };
 
@@ -212,113 +201,268 @@ export function UploadZone({ onUploadSuccess }) {
         if (xhr.status === 200) {
           const res = JSON.parse(xhr.responseText);
           
-          // Invalidate server caching list
+          // Force server revalidation tag
           await revalidateVideoCache();
           
-          // Generate target scan watch URL
           const publicId = res.public_id;
           const host = window.location.origin;
           const targetWatchUrl = `${host}/watch/${publicId}`;
 
-          setQrUrl(targetWatchUrl);
-          setTitle('');
-          setProgress(100);
-          
+          setQueue(prev => {
+            const updated = prev.map(item => 
+              item.id === itemId ? { ...item, status: 'completed', progress: 100, qrUrl: targetWatchUrl } : item
+            );
+            // Run next queued upload after a short pause
+            setTimeout(() => {
+              setQueue(current => {
+                triggerNextUpload(current);
+                return current;
+              });
+            }, 600);
+            return updated;
+          });
+
           if (onUploadSuccess) {
             onUploadSuccess(res);
           }
         } else {
           console.error(xhr.responseText);
-          setError('Upload failed. Please verify credentials and try again.');
+          setQueue(prev => {
+            const updated = prev.map(item => 
+              item.id === itemId ? { ...item, status: 'failed', error: 'Upload rejected by Cloudinary' } : item
+            );
+            setTimeout(() => {
+              setQueue(current => {
+                triggerNextUpload(current);
+                return current;
+              });
+            }, 600);
+            return updated;
+          });
         }
-        setUploading(false);
       };
 
       xhr.onerror = () => {
-        setError('Network error occurred during upload.');
-        setUploading(false);
+        setQueue(prev => {
+          const updated = prev.map(item => 
+            item.id === itemId ? { ...item, status: 'failed', error: 'Connection error' } : item
+          );
+          setTimeout(() => {
+            setQueue(current => {
+              triggerNextUpload(current);
+              return current;
+            });
+          }, 600);
+          return updated;
+        });
       };
 
       xhr.send(formData);
 
     } catch (err) {
       console.error(err);
-      setError(err.message === 'Unauthorized' ? 'Session expired. Please log in again.' : 'Failed to initialize upload credentials.');
-      setUploading(false);
+      setQueue(prev => {
+        const updated = prev.map(item => 
+          item.id === itemId ? { ...item, status: 'failed', error: err.message === 'Unauthorized' ? 'Session expired' : 'Auth failed' } : item
+        );
+        setTimeout(() => {
+          setQueue(current => {
+            triggerNextUpload(current);
+            return current;
+          });
+        }, 600);
+        return updated;
+      });
     }
   };
 
+  const triggerNextUpload = (currentQueue) => {
+    // Check if an item is already uploading
+    const active = currentQueue.find(item => item.status === 'uploading');
+    if (active) return;
+
+    // Find first pending item
+    const nextItem = currentQueue.find(item => item.status === 'pending');
+    if (!nextItem) {
+      setUploading(false);
+      return;
+    }
+
+    setUploading(true);
+    uploadSingleFile(nextItem.id, nextItem.file, nextItem.title);
+  };
+
+  const addFilesToQueue = (files) => {
+    const newItems = Array.from(files)
+      .filter(file => file.type.startsWith('video/'))
+      .map(file => {
+        const isTooLarge = file.size > 100 * 1024 * 1024;
+        
+        // Construct clean display name from filename
+        const cleanName = file.name
+          .replace(/\.[^/.]+$/, "") // strip extension
+          .replace(/[_-]/g, " ")     // replace dashes/underscores with space
+          .replace(/\b\w/g, c => c.toUpperCase()); // Capitalize words
+          
+        return {
+          id: Math.random().toString(36).substr(2, 9),
+          file,
+          title: cleanName,
+          progress: 0,
+          status: isTooLarge ? 'failed' : 'pending',
+          error: isTooLarge ? 'Exceeds 100MB limit' : '',
+          qrUrl: ''
+        };
+      });
+
+    if (newItems.length === 0) {
+      setError('Please select valid video files (MP4, MOV, WebM).');
+      return;
+    }
+
+    setError('');
+    setQueue(prev => {
+      const updated = [...prev, ...newItems];
+      // Run triggers immediately
+      triggerNextUpload(updated);
+      return updated;
+    });
+  };
+
   const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) processUpload(file);
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      addFilesToQueue(files);
+    }
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith('video/')) {
-      processUpload(file);
-    } else {
-      setError('Please drop a valid video file! (MP4, MOV, etc.)');
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      addFilesToQueue(files);
     }
+  };
+
+  const updateTitle = (itemId, newTitle) => {
+    setQueue(prev => prev.map(item => 
+      item.id === itemId ? { ...item, title: newTitle } : item
+    ));
+  };
+
+  const clearQueue = () => {
+    if (uploading) {
+      const conf = window.confirm('Uploads are in progress. Cancel remaining queue?');
+      if (!conf) return;
+    }
+    setQueue([]);
+    setUploading(false);
   };
 
   return (
     <div className="upload-wrapper-container">
-      {qrUrl ? (
-        <div className="modal-overlay" onClick={() => setQrUrl('')} style={{ position: 'relative', zIndex: 10, background: 'none', padding: 0 }}>
-          <QRDisplay value={qrUrl} filename="birthday-video-qr" onClose={() => setQrUrl('')} />
-        </div>
-      ) : (
-        <div 
-          className={`upload-wrapper ${dragOver ? 'drag-over' : ''}`}
-          onDragOver={(e) => handleDrag(e, true)}
-          onDragLeave={(e) => handleDrag(e, false)}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-          style={{ cursor: uploading ? 'not-allowed' : 'pointer' }}
-        >
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept="video/*"
-            style={{ display: 'none' }}
-            disabled={uploading}
-          />
-          
-          <div className="upload-icon">🎁</div>
-          <h3 style={{ marginBottom: 'var(--space-xs)' }}>
-            {uploading ? 'Uploading Video...' : 'Drag & Drop Birthday Video'}
-          </h3>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: 'var(--space-md)' }}>
-            or click to browse local files (MP4, MOV, WebM, max 100MB)
-          </p>
+      <div 
+        className={`upload-wrapper ${dragOver ? 'drag-over' : ''}`}
+        onDragOver={(e) => handleDrag(e, true)}
+        onDragLeave={(e) => handleDrag(e, false)}
+        onDrop={handleDrop}
+        onClick={() => !uploading && fileInputRef.current?.click()}
+        style={{ cursor: uploading ? 'not-allowed' : 'pointer', marginBottom: 'var(--space-lg)' }}
+      >
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          accept="video/*"
+          multiple
+          style={{ display: 'none' }}
+          disabled={uploading}
+        />
+        
+        <div className="upload-icon">🎁</div>
+        <h3 style={{ marginBottom: 'var(--space-xs)' }}>
+          {uploading ? 'Processing Bulk Upload...' : 'Drag & Drop Multiple Videos'}
+        </h3>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+          Select multiple files to upload in bulk (MP4, MOV, WebM, max 100MB per file)
+        </p>
+        
+        {error && <div className="auth-error" style={{ marginTop: '10px' }}>{error}</div>}
+      </div>
 
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onClick={(e) => e.stopPropagation()} // stop file picker trigger
-            placeholder="Name this memory (e.g. Cutting the cake 🎂)"
-            className="input-field"
-            disabled={uploading}
-            style={{ maxWidth: '320px', margin: '0 auto var(--space-md) auto', display: 'block' }}
-          />
+      {queue.length > 0 && (
+        <div style={{ background: 'var(--card-surface)', padding: 'var(--space-md)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-card)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)', borderBottom: '1px solid rgba(0,0,0,0.05)', paddingBottom: 'var(--space-xs)' }}>
+            <h4 style={{ color: 'var(--primary-pink)' }}>Upload Queue ({queue.length} files)</h4>
+            <button onClick={clearQueue} className="btn btn-outline" style={{ padding: '6px 12px', fontSize: '0.75rem', borderColor: '#FF4C4C', color: '#FF4C4C' }}>
+              Clear Queue 🗑️
+            </button>
+          </div>
 
-          {uploading && (
-            <div style={{ width: '100%', maxWidth: '320px', margin: '0 auto' }}>
-              <div className="progress-container">
-                <div className="progress-bar" style={{ width: `${progress}%` }}></div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)', maxHeight: '400px', overflowY: 'auto', paddingRight: '4px' }}>
+            {queue.map(item => (
+              <div key={item.id} style={{
+                background: 'rgba(255, 255, 255, 0.7)',
+                padding: 'var(--space-sm) var(--space-md)',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--accent-violet)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                  <div style={{ flex: 1, minWidth: '220px' }}>
+                    {item.status === 'pending' ? (
+                      <input
+                        type="text"
+                        value={item.title}
+                        onChange={(e) => updateTitle(item.id, e.target.value)}
+                        placeholder="Enter name for this memory..."
+                        className="input-field"
+                        style={{ fontSize: '0.85rem', padding: '6px 10px', marginBottom: 0, textAlign: 'left' }}
+                      />
+                    ) : (
+                      <strong style={{ fontSize: '0.9rem', color: 'var(--text-primary)' }}>{item.title}</strong>
+                    )}
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '2px', fontFamily: 'var(--font-mono)' }}>
+                      {item.file.name} ({(item.file.size / (1024 * 1024)).toFixed(1)} MB)
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {item.status === 'pending' && <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>Waiting... ⏳</span>}
+                    {item.status === 'uploading' && <span style={{ color: 'var(--primary-pink)', fontSize: '0.75rem', fontWeight: 'bold' }}>Uploading ({item.progress}%) ⚡</span>}
+                    {item.status === 'completed' && <span style={{ color: '#6BCB77', fontSize: '0.75rem', fontWeight: 'bold' }}>Success! 🎉</span>}
+                    {item.status === 'failed' && <span style={{ color: '#FF4C4C', fontSize: '0.75rem', fontWeight: 'bold' }}>Failed ❌ ({item.error})</span>}
+
+                    {item.status === 'completed' && (
+                      <>
+                        <a href={item.qrUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.72rem' }}>
+                          View 📺
+                        </a>
+                        <button onClick={() => setShowQrModal(item.qrUrl)} className="btn btn-primary" style={{ padding: '4px 10px', fontSize: '0.72rem' }}>
+                          QR Code 📱
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {item.status === 'uploading' && (
+                  <div className="progress-container" style={{ margin: 0, height: '8px' }}>
+                    <div className="progress-bar" style={{ width: `${item.progress}%` }}></div>
+                  </div>
+                )}
               </div>
-              <span style={{ fontWeight: '600', fontSize: '0.9rem', color: 'var(--primary-pink)' }}>
-                {progress}% uploaded
-              </span>
-            </div>
-          )}
+            ))}
+          </div>
+        </div>
+      )}
 
-          {error && <div className="auth-error" style={{ marginTop: '10px' }}>{error}</div>}
+      {showQrModal && (
+        <div className="modal-overlay" onClick={() => setShowQrModal('')}>
+          <QRDisplay value={showQrModal} filename="birthday-video-qr" onClose={() => setShowQrModal('')} />
         </div>
       )}
     </div>
