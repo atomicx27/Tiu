@@ -551,7 +551,7 @@ export function VideoCard({ video, onRefresh, isAdmin }) {
 
   // Cloudinary poster extraction (optimized image representation)
   const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-  const posterUrl = `https://res.cloudinary.com/${cloudName}/video/upload/f_auto,q_auto,so_0/${video.publicId}.jpg`;
+  const posterUrl = `https://res.cloudinary.com/${cloudName}/video/upload/f_auto,q_auto,so_0/v1/${video.publicId}.jpg`;
   
   // Dynamic watch URL
   const watchUrl = typeof window !== 'undefined' ? `${window.location.origin}/watch/${video.publicId}` : '';
@@ -650,6 +650,11 @@ export function VideoCard({ video, onRefresh, isAdmin }) {
  */
 export function VideoGallery({ initialVideos, isAdmin }) {
   const [search, setSearch] = useState('');
+  const [mounted, setMounted] = useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
   
   const filtered = (initialVideos || []).filter(v => 
     v.title.toLowerCase().includes(search.toLowerCase())
@@ -750,18 +755,20 @@ export function VideoGallery({ initialVideos, isAdmin }) {
       </a>
 
       {/* Hidden QR code renderings for gallery batch downloads */}
-      <div style={{ display: 'none' }}>
-        {initialVideos.map(video => (
-          <QRCodeSVG
-            key={`gallery-qr-${video.publicId}`}
-            id={`gallery-qr-${video.publicId}`}
-            value={`${typeof window !== 'undefined' ? window.location.origin : ''}/watch/${video.publicId}`}
-            size={300}
-            level="H"
-            marginSize={2}
-          />
-        ))}
-      </div>
+      {mounted && (
+        <div style={{ display: 'none' }}>
+          {initialVideos.map(video => (
+            <QRCodeSVG
+              key={`gallery-qr-${video.publicId}`}
+              id={`gallery-qr-${video.publicId}`}
+              value={`${typeof window !== 'undefined' ? window.location.origin : ''}/watch/${video.publicId}`}
+              size={300}
+              level="H"
+              marginSize={2}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

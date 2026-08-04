@@ -9,8 +9,8 @@ export default async function Page({ params }) {
   const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
   
   // Format Cloudinary dynamic CDN deliver URLs
-  const videoSrc = `https://res.cloudinary.com/${cloudName}/video/upload/f_auto,q_auto/${publicId}.mp4`;
-  const posterSrc = `https://res.cloudinary.com/${cloudName}/video/upload/f_auto,q_auto,so_0/${publicId}.jpg`;
+  const videoSrc = `https://res.cloudinary.com/${cloudName}/video/upload/f_auto,q_auto/v1/${publicId}.mp4`;
+  const posterSrc = `https://res.cloudinary.com/${cloudName}/video/upload/f_auto,q_auto,so_0/v1/${publicId}.jpg`;
 
   return (
     <main className="watch-page-container">
