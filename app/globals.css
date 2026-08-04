@@ -20,6 +20,7 @@
   --font-display: var(--font-nunito), sans-serif;
   --font-body: var(--font-dm-sans), sans-serif;
   --font-mono: var(--font-dm-mono), monospace;
+  --font-handwritten: var(--font-caveat), cursive;
 
   /* Spacing Scale */
   --space-2xs: 4px;
@@ -569,4 +570,376 @@ h1, h2, h3, h4, h5, h6 {
   .bento-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* Layout Upgrade: Magical Birthday Gift & Scrapbook styling */
+
+/* 1. Gift Opening Overlay */
+.gift-intro-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: radial-gradient(circle at center, #FFF5F7 0%, #FFE4E8 100%);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 1s cubic-bezier(0.77, 0, 0.175, 1), opacity 0.8s ease;
+  overflow: hidden;
+}
+
+.gift-intro-overlay.unwrapped {
+  transform: translateY(-100vh);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.gift-container {
+  text-align: center;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xl);
+  max-width: 500px;
+  padding: var(--space-xl);
+  z-index: 2;
+}
+
+/* 2. Sparkly background bubbles */
+.gift-sparkles {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.gift-sparkle-dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--primary-pink);
+  border-radius: 50%;
+  opacity: 0.3;
+  animation: float-sparkle 6s infinite linear;
+}
+
+.gift-sparkle-dot:nth-child(2n) {
+  background: var(--secondary-gold);
+  width: 8px;
+  height: 8px;
+  animation-duration: 8s;
+  animation-delay: 1s;
+}
+
+.gift-sparkle-dot:nth-child(3n) {
+  background: var(--accent-mint);
+  width: 10px;
+  height: 10px;
+  animation-duration: 5s;
+  animation-delay: 2s;
+}
+
+/* Positioning sparkle dots randomly */
+.gift-sparkle-dot:nth-child(1) { left: 10%; top: 20%; }
+.gift-sparkle-dot:nth-child(2) { left: 80%; top: 15%; }
+.gift-sparkle-dot:nth-child(3) { left: 25%; top: 70%; }
+.gift-sparkle-dot:nth-child(4) { left: 75%; top: 80%; }
+.gift-sparkle-dot:nth-child(5) { left: 5%; top: 50%; }
+.gift-sparkle-dot:nth-child(6) { left: 90%; top: 45%; }
+.gift-sparkle-dot:nth-child(7) { left: 50%; top: 10%; }
+.gift-sparkle-dot:nth-child(8) { left: 40%; top: 85%; }
+
+@keyframes float-sparkle {
+  0% { transform: translateY(0) scale(1) rotate(0deg); opacity: 0; }
+  50% { opacity: 0.6; }
+  100% { transform: translateY(-100px) scale(0.5) rotate(360deg); opacity: 0; }
+}
+
+/* 3. The 3D-like Gift Box */
+.gift-box {
+  width: 160px;
+  height: 160px;
+  background: linear-gradient(135deg, #FF6B8B 0%, #FF85A2 100%);
+  border-radius: 20px;
+  position: relative;
+  box-shadow: 0 20px 45px rgba(255, 107, 139, 0.4),
+              inset -5px -5px 0 rgba(0, 0, 0, 0.1),
+              inset 5px 5px 0 rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  transform-style: preserve-3d;
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.gift-box:hover {
+  transform: scale(1.08) rotate(3deg);
+  animation: wiggle 0.5s infinite alternate;
+}
+
+@keyframes wiggle {
+  0% { transform: scale(1.08) rotate(-3deg); }
+  100% { transform: scale(1.08) rotate(3deg); }
+}
+
+/* Lid */
+.gift-lid {
+  position: absolute;
+  width: 176px;
+  height: 40px;
+  background: linear-gradient(135deg, #FF85A2 0%, #FFA4B6 100%);
+  border-radius: 12px;
+  top: -15px;
+  left: -8px;
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1),
+              inset -3px -3px 0 rgba(0, 0, 0, 0.1),
+              inset 3px 3px 0 rgba(255, 255, 255, 0.4);
+  z-index: 5;
+}
+
+/* Ribbons and Bow */
+.gift-ribbon-v {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 100%;
+  background: linear-gradient(to bottom, #FFE17D, #FFD166);
+  box-shadow: inset -2px 0 0 rgba(0, 0, 0, 0.1);
+}
+
+.gift-ribbon-h {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  width: 100%;
+  height: 24px;
+  background: linear-gradient(to right, #FFE17D, #FFD166);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.1);
+}
+
+.gift-bow {
+  position: absolute;
+  top: -35px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 25px;
+  z-index: 10;
+}
+
+.gift-bow::before, .gift-bow::after {
+  content: '';
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  background: #FFD166;
+  border-radius: 50% 50% 0 50%;
+  box-shadow: inset -2px -2px 0 rgba(0,0,0,0.1);
+}
+
+.gift-bow::before {
+  transform: rotate(-45deg);
+  left: 5px;
+}
+
+.gift-bow::after {
+  transform: rotate(135deg) scaleY(-1);
+  right: 5px;
+}
+
+/* Text & Title */
+.gift-text {
+  animation: fadeUp 1s ease-out;
+}
+
+@keyframes fadeUp {
+  0% { transform: translateY(20px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+.gift-title {
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  color: #FF5A79;
+  text-shadow: 2px 2px 0 #FFF, 4px 4px 0 rgba(255, 133, 162, 0.2);
+  margin-bottom: var(--space-xs);
+}
+
+.gift-subtitle {
+  font-family: var(--font-body);
+  color: var(--text-secondary);
+  font-size: 1rem;
+  margin-bottom: var(--space-lg);
+  font-weight: 500;
+}
+
+.btn-unwrap {
+  background: linear-gradient(135deg, #FF6B8B 0%, #FF85A2 100%);
+  color: white;
+  border-radius: var(--radius-full);
+  padding: 14px 32px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  box-shadow: 0 10px 25px rgba(255, 107, 139, 0.4);
+  transition: all 0.3s ease;
+}
+
+.btn-unwrap:hover {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 15px 30px rgba(255, 107, 139, 0.5);
+}
+
+/* 4. Polaroid Scrapbook Grid Layout */
+.polaroid-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--space-xl);
+  padding: var(--space-lg) 0;
+}
+
+/* Polaroid Card Layout */
+.polaroid-card {
+  background: #FFFFFF;
+  border-radius: 4px;
+  padding: 16px 16px 28px 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 
+              0 2px 6px rgba(0, 0, 0, 0.04);
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), 
+              box-shadow 0.4s ease;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+  border: 1px solid rgba(0,0,0,0.06);
+}
+
+/* Polaroid Tape Ribbon Overlay */
+.polaroid-card::before {
+  content: '';
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%) rotate(-3deg);
+  width: 90px;
+  height: 26px;
+  background: rgba(255, 237, 204, 0.7);
+  backdrop-filter: blur(1px);
+  border-left: 2px dashed rgba(255, 133, 162, 0.2);
+  border-right: 2px dashed rgba(255, 133, 162, 0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* Alternating Natural Tilts */
+.polaroid-card:nth-child(3n+1) { transform: rotate(-1.5deg); }
+.polaroid-card:nth-child(3n+2) { transform: rotate(1.2deg); }
+.polaroid-card:nth-child(3n+3) { transform: rotate(-0.8deg); }
+
+.polaroid-card:hover {
+  transform: rotate(0deg) scale(1.04) translateY(-10px);
+  box-shadow: 0 25px 45px rgba(255, 133, 162, 0.18),
+              0 5px 15px rgba(0, 0, 0, 0.05);
+  z-index: 20;
+}
+
+/* Polaroid Thumbnail border style */
+.polaroid-card .card-thumbnail-wrapper {
+  aspect-ratio: 1 / 1; /* square layout for polaroid */
+  border-radius: 2px;
+  border: 1px solid rgba(0,0,0,0.08);
+  margin-bottom: 14px;
+}
+
+/* Polaroid handwritten texts */
+.polaroid-title {
+  font-family: var(--font-handwritten);
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: #33334D;
+  margin-bottom: var(--space-2xs);
+  line-height: 1.2;
+}
+
+.polaroid-date {
+  font-family: var(--font-handwritten);
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+/* Polaroid interactive card badge */
+.polaroid-card .qr-badge {
+  bottom: 8px;
+  right: 8px;
+  border-radius: 4px;
+}
+
+/* 5. Birthday Gift Tag Search Input */
+.gift-tag-search-wrapper {
+  position: relative;
+  max-width: 420px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.gift-tag-search-wrapper::before {
+  content: '🏷️';
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%) rotate(-15deg);
+  font-size: 1.2rem;
+  z-index: 2;
+}
+
+.gift-tag-input {
+  width: 100%;
+  padding: 14px 20px 14px 44px;
+  border: 2px solid var(--primary-pink);
+  border-radius: 12px;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  background-color: white;
+  box-shadow: 0 6px 15px rgba(255, 133, 162, 0.08);
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.gift-tag-input:focus {
+  border-color: #ff577c;
+  box-shadow: 0 10px 25px rgba(255, 133, 162, 0.15);
+  transform: translateY(-1px);
+}
+
+/* 6. Floating Background Hearts/Balloons */
+.floating-hearts-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.floating-heart {
+  position: absolute;
+  bottom: -50px;
+  font-size: 1.5rem;
+  opacity: 0;
+  animation: float-up 12s infinite ease-in-out;
+}
+
+@keyframes float-up {
+  0% { transform: translateY(0) translateX(0) rotate(0deg); opacity: 0; }
+  10% { opacity: 0.5; }
+  90% { opacity: 0.5; }
+  100% { transform: translateY(-105vh) translateX(100px) rotate(360deg); opacity: 0; }
 }

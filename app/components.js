@@ -583,7 +583,7 @@ export function VideoCard({ video, onRefresh, isAdmin }) {
 
   return (
     <>
-      <div className="video-card" onClick={handleCardClick} style={{ cursor: 'pointer' }}>
+      <div className="polaroid-card" onClick={handleCardClick} style={{ cursor: 'pointer' }}>
         <div className="card-thumbnail-wrapper">
           <img src={posterUrl} alt={video.title} className="card-thumbnail" loading="lazy" />
           <div className="play-overlay">
@@ -603,8 +603,8 @@ export function VideoCard({ video, onRefresh, isAdmin }) {
 
         <div className="card-content">
           <div>
-            <h4 className="card-title">{video.title}</h4>
-            <span className="card-date">
+            <h4 className="polaroid-title">{video.title}</h4>
+            <span className="polaroid-date">
               📅 {new Date(video.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
             </span>
           </div>
@@ -645,16 +645,74 @@ export function VideoCard({ video, onRefresh, isAdmin }) {
 }
 
 /**
+ * 4.5. GiftIntro Component
+ * Immersive 3D-like box opening animation with confetti and slow rising sparkles.
+ */
+export function GiftIntro({ onUnwrap }) {
+  const [unwrapping, setUnwrapping] = useState(false);
+
+  const handleOpen = () => {
+    setUnwrapping(true);
+    setTimeout(() => {
+      onUnwrap();
+    }, 1000); // matches the translation exit animation duration
+  };
+
+  return (
+    <div className={`gift-intro-overlay ${unwrapping ? 'unwrapped' : ''}`}>
+      <div className="gift-container">
+        {/* Floating background sparkles inside the gift screen */}
+        <div className="gift-sparkles">
+          {[...Array(8)].map((_, i) => (
+            <div key={i} className="gift-sparkle-dot"></div>
+          ))}
+        </div>
+        
+        <div className="gift-box" onClick={handleOpen}>
+          <div className="gift-lid"></div>
+          <div className="gift-box-body">
+            <div className="gift-ribbon-v"></div>
+            <div className="gift-ribbon-h"></div>
+            <div className="gift-bow"></div>
+          </div>
+        </div>
+
+        <div className="gift-text">
+          <h2 className="gift-title">For Saisha 🌸</h2>
+          <p className="gift-subtitle">A collection of beautiful video memories created with love by Tiu.</p>
+          <button className="btn btn-unwrap" onClick={handleOpen}>
+            🎁 Tap to Unwrap & Open 🎁
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * 5. VideoGallery Component
  * Wraps search input, empty state handling, and the responsive bento grid
  */
 export function VideoGallery({ initialVideos, isAdmin }) {
   const [search, setSearch] = useState('');
   const [mounted, setMounted] = useState(false);
+  const [isUnwrapped, setIsUnwrapped] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('tiu_box_unwrapped') === 'true';
+    }
+    return false;
+  });
 
   React.useEffect(() => {
     setMounted(true);
   }, []);
+
+  const handleUnwrap = () => {
+    setIsUnwrapped(true);
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('tiu_box_unwrapped', 'true');
+    }
+  };
   
   const filtered = (initialVideos || []).filter(v => 
     v.title.toLowerCase().includes(search.toLowerCase())
@@ -710,15 +768,38 @@ export function VideoGallery({ initialVideos, isAdmin }) {
 
   return (
     <div>
+      {mounted && !isUnwrapped && (
+        <GiftIntro onUnwrap={handleUnwrap} />
+      )}
+
+      {mounted && (
+        <div className="floating-hearts-container">
+          {[...Array(15)].map((_, idx) => (
+            <span 
+              key={idx} 
+              className="floating-heart"
+              style={{
+                left: `${(idx * 7) % 100}%`,
+                animationDelay: `${idx * 0.8}s`,
+                fontSize: `${1.2 + (idx % 3) * 0.4}rem`,
+              }}
+            >
+              {['❤️', '🎈', '✨', '🌸', '💖'][idx % 5]}
+            </span>
+          ))}
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-md)', marginBottom: 'var(--space-xl)' }}>
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search birthday memories..."
-          className="input-field"
-          style={{ maxWidth: '400px', margin: 0, padding: '12px 20px', borderRadius: 'var(--radius-full)' }}
-        />
+        <div className="gift-tag-search-wrapper">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search birthday memories..."
+            className="gift-tag-input"
+          />
+        </div>
         {initialVideos.length > 0 && (
           <button onClick={handleDownloadAll} className="btn btn-primary" style={{ borderRadius: 'var(--radius-full)' }}>
             Download All QR Codes 📥 ({initialVideos.length})
@@ -735,7 +816,7 @@ export function VideoGallery({ initialVideos, isAdmin }) {
           </p>
         </div>
       ) : (
-        <div className="bento-grid">
+        <div className="polaroid-grid">
           {filtered.map((video) => (
             <VideoCard 
               key={video.publicId} 
